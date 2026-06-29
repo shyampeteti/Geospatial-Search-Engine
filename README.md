@@ -1,56 +1,160 @@
 # Geospatial Search Engine
 
-A high-performance spatial indexing engine that maps coordinates and runs location-based queries in $O(\log N)$ time. It replicates the core backend mechanics used by ride-sharing and delivery apps like Uber or Zomato to locate nearby drivers quickly.
+A high-performance geospatial search engine that efficiently performs 2D spatial queries using a **QuadTree** data structure. The project combines a **C++ backend** for fast spatial indexing with a **Python Streamlit** interface for interactive visualization and benchmarking.
 
-## The Core Problem
+---
 
-If you have a city with millions of active drivers, calculating which ones are closest to a user dropping a pin is computationally expensive. 
+## Features
 
-* **The Naive Way:** Iterating through an array of all coordinates and running the Euclidean distance formula on every single driver takes $O(N)$ time. At scale, this locks up the CPU and crashes the server.
-* **The Optimized Way:** This engine uses a **QuadTree** data structure. It divides the 2D map space into structured quadrants, bringing the query lookup window down to a highly optimized $O(\log N)$ scale.
+- 🚀 **Fast Spatial Search** using a custom QuadTree implementation
+- 📍 Efficient range queries with **O(log N)** average search complexity
+- 💻 **C++ Core Engine** optimized with `-O3` for maximum performance
+- 📊 Interactive **Streamlit Dashboard** for visualization
+- 📈 **Live Performance Benchmarking** comparing QuadTree search against linear search
+- 🎯 Real-time visualization of search regions and matching points
+
+---
+
+## Project Overview
+
+### C++ QuadTree Engine
+- Implemented a QuadTree from scratch for efficient spatial indexing.
+- Supports recursive node subdivision when capacity exceeds a threshold.
+- Uses bounding-box intersection checks to prune unnecessary regions during search.
+- Optimized for low-latency range queries.
+
+### Python Streamlit Interface
+- Interactive web application built with Streamlit.
+- Allows users to:
+  - Generate and visualize random 2D points.
+  - Move and resize the search region.
+  - Query the C++ backend.
+  - Display returned points on the map.
+  - Compare QuadTree and linear search performance.
+
+### Live Benchmarking
+- Measures execution time for:
+  - QuadTree search
+  - Brute-force linear search
+- Displays the runtime difference in real time.
 
 ---
 
 ## How It Works
 
-### 1. Spatial Subdivision (Building the Index)
-The map starts as a single box covering the entire layout boundary. As coordinates are inserted one by one, the engine checks node thresholds:
-* Every grid square has a maximum capacity limit (set to 4 items in this engine).
-* When a 5th coordinate drops into a box, that quadrant dynamically splits (**subdivides**) into four smaller equal sub-quadrants: Northwest (NW), Northeast (NE), Southwest (SW), and Southeast (SE).
-* The existing items are pushed down into these new children nodes. Dense spots (like city centers) become clusters of tiny boxes, while empty areas stay large.
+### 1. Building the QuadTree
 
-### 2. Algorithmic Pruning (Searching the Index)
-When you query a specific region on the map (a search bounding box):
-* The engine checks if the search boundary overlaps with the current QuadTree node's boundary box.
-* If there is no intersection, the algorithm instantly discards (**prunes**) that entire branch of the tree. If you search the south side of the city, the engine completely skips analyzing the northern half.
-* It only runs exact location math on the few points within nodes that explicitly overlap the search frame.
+- The entire map is initially represented as a single bounding box.
+- Each node stores up to **4 points**.
+- Once a node exceeds its capacity, it subdivides into four equal child regions:
+  - North-West
+  - North-East
+  - South-West
+  - South-East
+- Points are redistributed recursively, creating a hierarchical spatial index.
+
+### 2. Performing Range Search
+
+Instead of scanning every point:
+
+- The algorithm checks whether a QuadTree node intersects the search region.
+- Non-overlapping nodes are immediately discarded.
+- Only relevant branches are explored recursively.
+- This significantly reduces the number of point comparisons, yielding approximately **O(log N)** search complexity on average.
 
 ---
 
-## Performance Benchmark
+## Tech Stack
 
-The system runs a live performance test with every query, executing the same search parameters through two different approaches inside the C++ application core:
-1. **QuadTree Traversal:** Navigates the tree branches using boundary intersections.
-2. **Linear Search:** Manually iterates through the entire flat dataset array.
-
-The microsecond execution times are streamed straight to the web UI dashboard, demonstrating the massive efficiency gain of tree-based spatial indexing.
+- **C++** — QuadTree implementation and search engine
+- **Python**
+- **Streamlit** — Interactive UI
+- **NumPy** — Data generation
+- **Matplotlib** — Visualization
 
 ---
 
 ## Project Structure
 
-* `quadtree.cpp` — Optimized C++ backend engine managing memory, tree allocations, recursive insertions, and pruning lookups.
-* `app.py` — Python UI wrapper using Streamlit to accept slider inputs, spawn background execution processes, and plot geographic coordinates using Matplotlib.
-* `drivers.txt` — Autogenerated spatial coordinate dataset.
+```
+.
+├── app.py              # Streamlit application
+├── quadtree.cpp        # C++ QuadTree implementation
+├── quadtree.exe        # Compiled executable (Windows)
+├── README.md
+```
 
 ---
 
-## Setup and Installation
+## Installation
 
-### Prerequisites
-Make sure you have a C++ compiler (`g++`) installed on your system along with Python 3.
+### 1. Clone the Repository
 
-### 1. Install Python Packages
-Run the following installation command in your terminal terminal:
+```bash
+git clone <repository-url>
+cd Geospatial-Search-Engine
+```
+
+### 2. Install Python Dependencies
+
 ```bash
 pip install streamlit numpy matplotlib
+```
+
+---
+
+## Compile the C++ Engine
+
+Compile with maximum optimization (`-O3`).
+
+### Linux / macOS
+
+```bash
+g++ -O3 quadtree.cpp -o quadtree
+```
+
+### Windows
+
+```bash
+g++ -O3 quadtree.cpp -o quadtree.exe
+```
+
+---
+
+## Run the Application
+
+Launch the Streamlit interface:
+
+```bash
+streamlit run app.py
+```
+
+Open the local URL displayed in the terminal (typically `http://localhost:8501`).
+
+---
+
+## Performance
+
+Compared to a traditional linear search, the QuadTree:
+
+- Avoids scanning every point.
+- Prunes irrelevant regions early.
+- Provides significantly faster query times on large datasets.
+- Includes built-in benchmarking to visualize the performance improvement.
+
+---
+
+## Future Improvements
+
+- k-Nearest Neighbor (k-NN) Search
+- Point Insertion & Deletion
+- Circular Range Queries
+- Dynamic Dataset Loading
+- Support for Geographic Coordinates (Latitude/Longitude)
+- Parallel Search Optimization
+
+---
+
+## Author
+
+Developed as a data structures and algorithms project demonstrating efficient spatial indexing, recursive partitioning, and interactive visualization.
