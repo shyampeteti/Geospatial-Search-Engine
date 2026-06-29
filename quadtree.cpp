@@ -4,6 +4,7 @@
 #include <string>
 #include <cmath>
 #include <chrono>
+#include <algorithm> // Added for sorting
 
 struct Point {
     double x;
@@ -117,7 +118,6 @@ public:
     }
 };
 
-// Naive Linear Search for Performance Comparison
 void linear_query(const Boundary& range, const std::vector<Point>& all_points, std::vector<Point>& found) {
     for (const auto& p : all_points) {
         if (range.contains(p)) {
@@ -127,8 +127,9 @@ void linear_query(const Boundary& range, const std::vector<Point>& all_points, s
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 6) {
-        std::cerr << "Usage: " << argv[0] << " <points_file> <qx> <qy> <qhw> <qhh>\n";
+    // Now expects 7 arguments (added k_nearest)
+    if (argc < 7) {
+        std::cerr << "Usage: " << argv[0] << " <points_file> <qx> <qy> <qhw> <qhh> <k>\n";
         return 1;
     }
 
@@ -137,6 +138,7 @@ int main(int argc, char* argv[]) {
     double qy = std::stod(argv[3]);
     double qhw = std::stod(argv[4]);
     double qhh = std::stod(argv[5]);
+    int k_nearest_count = std::stoi(argv[6]); // Read the K value from Python
 
     Boundary world = {50.0, 50.0, 50.0, 50.0};
     QuadTree qtree(world, 4); 
@@ -151,33 +153,53 @@ int main(int argc, char* argv[]) {
     double x, y;
     while (infile >> x >> y) {
         qtree.insert({x, y});
-        all_raw_points.push_back({x, y}); // Keep raw list for linear comparison
+        all_raw_points.push_back({x, y}); 
     }
     infile.close();
 
     Boundary search_range = {qx, qy, qhw, qhh};
     
-    // Benchmark 1: QuadTree Query Time
+    // Run Queries
     auto start_q = std::chrono::high_resolution_clock::now();
     std::vector<Point> qtree_results;
     qtree.query(search_range, qtree_results);
     auto end_q = std::chrono::high_resolution_clock::now();
     auto duration_q = std::chrono::duration_cast<std::chrono::microseconds>(end_q - start_q).count();
 
-    // Benchmark 2: Naive Linear Query Time
     auto start_l = std::chrono::high_resolution_clock::now();
     std::vector<Point> linear_results;
     linear_query(search_range, all_raw_points, linear_results);
     auto end_l = std::chrono::high_resolution_clock::now();
     auto duration_l = std::chrono::duration_cast<std::chrono::microseconds>(end_l - start_l).count();
 
-    // Line 1: Performance metrics piped out to Python
+    // --- K-NEAREST MATH ---
+    // Sort the found points based on how close they are to the exact center of the query
+    std::vector<Point> nearest_points = qtree_results;
+    std::sort(nearest_points.begin(), nearest_points.end(), [qx, qy](const Point& a, const Point& b) {
+        double dist_a = (a.x - qx)*(a.x - qx) + (a.y - qy)*(a.y - qy);
+        double dist_b = (b.x - qx)*(b.x - qx) + (b.y - qy)*(b.y - qy);
+        return dist_a < dist_b;
+    });
+
+    // Trim the list to just the top K elements (or fewer, if the box doesn't have K items)
+    if (nearest_points.size() > k_nearest_count) {
+        nearest_points.resize(k_nearest_count);
+    }
+
+    // Line 1: Benchmark
     std::cout << "BENCHMARK:" << duration_q << ":" << duration_l << "\n";
 
-    // Line 2: Spatial coordinates matching the query criteria
+    // Line 2: All points found inside the box
     for (size_t i = 0; i < qtree_results.size(); ++i) {
         std::cout << qtree_results[i].x << "," << qtree_results[i].y;
         if (i < qtree_results.size() - 1) std::cout << " ";
+    }
+    std::cout << "\n";
+
+    // Line 3: The top K nearest points
+    for (size_t i = 0; i < nearest_points.size(); ++i) {
+        std::cout << nearest_points[i].x << "," << nearest_points[i].y;
+        if (i < nearest_points.size() - 1) std::cout << " ";
     }
     std::cout << "\n";
 
