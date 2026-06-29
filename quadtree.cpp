@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <cmath>
+#include <chrono>
 
 struct Point {
     double x;
@@ -10,18 +11,16 @@ struct Point {
 };
 
 struct Boundary {
-    double x;  // Center X coordinate
-    double y;  // Center Y coordinate
-    double hw; // Half-width (extent from center to edge)
-    double hh; // Half-height (extent from center to edge)
+    double x;  
+    double y;  
+    double hw; 
+    double hh; 
 
-    // Checks if a point lies within this bounding box
     bool contains(const Point& p) const {
         return (p.x >= x - hw && p.x <= x + hw &&
                 p.y >= y - hh && p.y <= y + hh);
     }
 
-    // Checks if another bounding box overlaps with this one
     bool intersects(const Boundary& other) const {
         return !(other.x - other.hw > x + hw ||
                  other.x + other.hw < x - hw ||
@@ -37,13 +36,11 @@ private:
     std::vector<Point> points;
     bool divided;
 
-    // The four quadrants (Children nodes)
     QuadTree* nw;
     QuadTree* ne;
     QuadTree* sw;
     QuadTree* se;
 
-    // Splits the current node into 4 equal quadrants
     void subdivide() {
         double x = boundary.x;
         double y = boundary.y;
@@ -76,13 +73,11 @@ public:
             return false;
         }
 
-        // If there's space and we haven't split, store it here
         if (points.size() < capacity && !divided) {
             points.push_back(p);
             return true;
         }
 
-        // If full, split the node and push existing elements down
         if (!divided) {
             subdivide();
             for (const auto& pt : points) {
@@ -94,7 +89,6 @@ public:
             points.clear();
         }
 
-        // Route the incoming point to its proper quadrant
         if (nw->insert(p)) return true;
         if (ne->insert(p)) return true;
         if (sw->insert(p)) return true;
@@ -104,7 +98,6 @@ public:
     }
 
     void query(const Boundary& range, std::vector<Point>& found) const {
-        // Pruning Step: If search box doesn't touch this quadrant, instantly discard it
         if (!boundary.intersects(range)) {
             return;
         }
@@ -124,6 +117,15 @@ public:
     }
 };
 
+// Naive Linear Search for Performance Comparison
+void linear_query(const Boundary& range, const std::vector<Point>& all_points, std::vector<Point>& found) {
+    for (const auto& p : all_points) {
+        if (range.contains(p)) {
+            found.push_back(p);
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 6) {
         std::cerr << "Usage: " << argv[0] << " <points_file> <qx> <qy> <qhw> <qhh>\n";
@@ -136,9 +138,8 @@ int main(int argc, char* argv[]) {
     double qhw = std::stod(argv[4]);
     double qhh = std::stod(argv[5]);
 
-    // Initialize map boundaries from 0 to 100 on both axes
     Boundary world = {50.0, 50.0, 50.0, 50.0};
-    QuadTree qtree(world, 4); // Max 4 points per quadrant node
+    QuadTree qtree(world, 4); 
 
     std::ifstream infile(filename);
     if (!infile.is_open()) {
@@ -146,20 +147,37 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    std::vector<Point> all_raw_points;
     double x, y;
     while (infile >> x >> y) {
         qtree.insert({x, y});
+        all_raw_points.push_back({x, y}); // Keep raw list for linear comparison
     }
     infile.close();
 
     Boundary search_range = {qx, qy, qhw, qhh};
-    std::vector<Point> results;
-    qtree.query(search_range, results);
+    
+    // Benchmark 1: QuadTree Query Time
+    auto start_q = std::chrono::high_resolution_clock::now();
+    std::vector<Point> qtree_results;
+    qtree.query(search_range, qtree_results);
+    auto end_q = std::chrono::high_resolution_clock::now();
+    auto duration_q = std::chrono::duration_cast<std::chrono::microseconds>(end_q - start_q).count();
 
-    // Stream coordinates back out to standard out for Python ingestion
-    for (size_t i = 0; i < results.size(); ++i) {
-        std::cout << results[i].x << "," << results[i].y;
-        if (i < results.size() - 1) std::cout << " ";
+    // Benchmark 2: Naive Linear Query Time
+    auto start_l = std::chrono::high_resolution_clock::now();
+    std::vector<Point> linear_results;
+    linear_query(search_range, all_raw_points, linear_results);
+    auto end_l = std::chrono::high_resolution_clock::now();
+    auto duration_l = std::chrono::duration_cast<std::chrono::microseconds>(end_l - start_l).count();
+
+    // Line 1: Performance metrics piped out to Python
+    std::cout << "BENCHMARK:" << duration_q << ":" << duration_l << "\n";
+
+    // Line 2: Spatial coordinates matching the query criteria
+    for (size_t i = 0; i < qtree_results.size(); ++i) {
+        std::cout << qtree_results[i].x << "," << qtree_results[i].y;
+        if (i < qtree_results.size() - 1) std::cout << " ";
     }
     std::cout << "\n";
 
